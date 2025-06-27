@@ -20,7 +20,7 @@
     - The script will exit with code 2 if the friendly name does not match.
 
 .EXAMPLE
-    .\Apply-RDPCert.ps1 -CertThumbprint "ABCDEFF123456..." -CertFriendlyName "RDP Certificate"
+    .\Apply-RDPCert.ps1 -CertThumbprint "AB CD EF 12 34 56..." -CertFriendlyName "RDP Certificate"
     Applies the certificate with the specified thumbprint and friendly name to RDP.
 #>
 
