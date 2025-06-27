@@ -21,7 +21,6 @@
 
 .EXAMPLE
     .\Apply-RDPCert.ps1 -CertThumbprint "ABCDEFF123456..." -CertFriendlyName "RDP Certificate"
-
     Applies the certificate with the specified thumbprint and friendly name to RDP.
 #>
 
