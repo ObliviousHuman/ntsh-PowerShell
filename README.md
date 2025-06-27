@@ -8,7 +8,7 @@ Miscellaneous PowerShell Scripts
 
 *This was written for the purposes of getting a LetsEncrypt Certificate for RDP written to the applicable Certificate Store with win-acme.*
 
-### Simplistic functionality executed using the following parameters
+### Simplistic functionality executed using the soemthing like the following parameters
 
 ```cmd
 wacs.exe --renew --baseuri "https://acme-v02.api.letsencrypt.org/" ^
