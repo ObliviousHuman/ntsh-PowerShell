@@ -1,3 +1,45 @@
+<#
+.SYNOPSIS
+    Helper script to manage ACME DNS-01 challenge records via nsupdate on a BIND DNS server.
+
+.DESCRIPTION
+    This script is designed to be called by win-acme (or similar ACME clients) to create and delete TXT records
+    for DNS-01 challenges. 
+    It uses nsupdate with a TSIG key for secure updates to the DNS server.
+
+.PARAMETER Action
+    The action to perform: 
+    'create' to add a TXT record
+    'delete' to remove a specific TXT record.
+    
+.PARAMETER Identifier
+    A unique identifier for the challenge (e.g. a hash of the domain and token). 
+    This is for logging and correlation purposes.
+    'Identifier' is not used in the DNS update itself but should be included in logs for troubleshooting.
+
+.PARAMETER RecordName
+    The name of the DNS record to manage (e.g. "_acme-challenge" or "_acme-challenge.subdomain").
+    The script will normalize this to a fully qualified domain name (FQDN) by appending the zone and a trailing dot.
+    'RecordName' should not include the zone name, as the script will handle that based on configuration.
+    
+.PARAMETER Token
+    The value of the TXT record to create or delete. 
+    This is the ACME challenge token that needs to be present for validation.
+
+.NOTES
+    - Requires PowerShell 5.1 or later.
+    - The script must have access to nsupdate.exe and the TSIG key file.
+    - The script will log detailed information about its execution to a specified log directory.
+    - The script will throw exceptions if nsupdate fails or if required files are missing.
+
+.EXAMPLE
+    .\Setup-AcmeChallengeDNS01.ps1 -Action create -Identifier "abc123" -RecordName "_acme-challenge" -Token "challenge-token-value"
+    Creates a TXT record for the ACME DNS-01 challenge.
+
+ #>
+
+# Requires -Version 5.1
+# Requires -RunAsAdministrator
 param(
   [Parameter(Mandatory=$true)][ValidateSet("create","delete")][string]$Action,
   [Parameter(Mandatory=$true)][string]$Identifier,
@@ -8,11 +50,13 @@ param(
 # ----------------------------
 # CONFIG
 # ----------------------------
+# Update these variables with your environment-specific values
 $nsupdate = "{nsupdate_path}\nsupdate.exe"  # e.g. D:\example\bin\nsupdate.exe
 $keyFile  = "{key_file_path}\key_name.key"  # e.g. D:\example\keys\mykey.key
 $server   = "{dns_server}"                  # e.g. ns1.exampledns.com
-$ttl      = 300
+$ttl      = 300                             # Keep TTL low for ACME challenges (e.g. 300 seconds) to allow for quick propagation and cleanup
 
+# Logging configuration
 $logDir   = "{log_directory_path}"          # e.g. "C:\Logs\AcmeChallengeDNS01"
 $logFile  = Join-Path $logDir ("winacme-dns-{0}.log" -f (Get-Date -Format "yyyyMMdd"))
 
@@ -25,18 +69,26 @@ $doNslookup = $true
 # ----------------------------
 # HELPERS
 # ----------------------------
+# Helper functions for logging, redaction, and nslookup
+# Ensure-Dir: Creates a directory if it doesn't exist
+# Write-Log: Writes a timestamped message to the log file 
+# Redact: Redacts sensitive values for logging if configured to do so
+
+# Helper function to ensure a directory exists
 function Ensure-Dir([string]$path) {
   if (-not (Test-Path -LiteralPath $path)) {
     New-Item -ItemType Directory -Path $path -Force | Out-Null
   }
 }
 
+# Simple logging function with timestamp
 function Write-Log([string]$message) {
   $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
   $line = "{0}  {1}" -f $ts, $message
   Add-Content -LiteralPath $logFile -Value $line
 }
 
+# Redact token for logs if configured to do so
 function Redact([string]$value) {
   if (-not $redactTokenInLogs) { return $value }
   if ([string]::IsNullOrWhiteSpace($value)) { return $value }
@@ -45,6 +97,7 @@ function Redact([string]$value) {
   return "{0}...{1}" -f $value.Substring(0,4), $value.Substring($value.Length-4,4)
 }
 
+# Helper function to run nslookup for TXT records
 function Run-NsLookupTxt([string]$fqdn, [string]$dnsServer) {
   # returns multi-line string
   $out = & nslookup.exe -type=TXT $fqdn $dnsServer 2>&1 | Out-String
